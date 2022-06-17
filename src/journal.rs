@@ -10,10 +10,11 @@ use memchr::memchr;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::convert::TryInto;
+use std::ffi::CString;
 use std::io::ErrorKind::InvalidData;
-use std::mem::MaybeUninit;
+use std::mem::{self, MaybeUninit};
 use std::os::raw::c_void;
-use std::os::unix::io::AsRawFd;
+use std::os::unix::io::{AsRawFd, IntoRawFd};
 use std::{fmt, io, ptr, result, slice, time};
 
 fn collect_and_send<T, S>(args: T) -> c_int
@@ -1057,5 +1058,54 @@ impl AsRawFd for JournalRef {
     #[inline]
     fn as_raw_fd(&self) -> c_int {
         self.fd().unwrap()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct JournalMut {
+    fd: c_int,
+}
+
+impl JournalMut {
+    pub fn new(identifier: CString, priority: c_int, level_prefix: bool) -> Result<Self> {
+        Ok(sd_try!(ffi::sd_journal_stream_fd(
+            identifier.as_ptr(),
+            priority,
+            level_prefix
+        )))
+        .map(|fd| JournalMut { fd })
+    }
+
+    pub fn write(&self, buf: &[u8]) -> Result<usize> {
+        let ret =
+            unsafe { libc::write(self.fd, buf.as_ptr() as *const c_void, buf.len() as size_t) };
+
+        if ret < 0 {
+            Err(crate::Error::from_raw_os_error(-(ret as i32)))
+        } else {
+            Ok(ret as usize)
+        }
+    }
+}
+
+impl AsRawFd for JournalMut {
+    #[inline]
+    fn as_raw_fd(&self) -> c_int {
+        self.fd
+    }
+}
+
+impl IntoRawFd for JournalMut {
+    #[inline]
+    fn into_raw_fd(self) -> c_int {
+        let fd = self.fd;
+        mem::forget(self);
+        fd
+    }
+}
+
+impl Drop for JournalMut {
+    fn drop(&mut self) {
+        unsafe { libc::close(self.fd) };
     }
 }

@@ -119,6 +119,11 @@ extern "C" {
     pub fn sd_journal_process(j: *mut sd_journal) -> c_int;
     pub fn sd_journal_wait(j: *mut sd_journal, timeout_usec: u64) -> c_int;
     pub fn sd_journal_reliable_fd(j: *mut sd_journal) -> c_int;
+    pub fn sd_journal_stream_fd(
+        identifier: *const c_char,
+        priority: c_int,
+        level_prefix: bool,
+    ) -> c_int;
 
     pub fn sd_journal_get_catalog(j: *mut sd_journal, text: *mut *const c_char) -> c_int;
     pub fn sd_journal_get_catalog_for_message_id(id: sd_id128_t, ret: *mut *const c_char) -> c_int;
